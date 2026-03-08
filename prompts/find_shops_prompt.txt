@@ -18,7 +18,7 @@ Return a JSON object with the following structure ONLY — no prose, no markdown
       "city": "City",
       "country": "Country",
       "website": "https://... or null",
-      "email": "contact email or null",
+      "email": "verified contact email or null",
       "phone": "phone number or null",
       "instagram": "@handle or null",
       "reason": "1-2 sentence explanation of why this shop is a good fit for Omakase"
@@ -30,3 +30,8 @@ Return a JSON object with the following structure ONLY — no prose, no markdown
 }
 
 Be as accurate as possible. Only include shops you are confident exist. Set any unknown fields to null.
+
+IMPORTANT — email addresses:
+- Only include an email address if you are highly confident it is the real, current contact email for that specific shop.
+- Do NOT guess, infer, or construct email addresses (e.g. do not fabricate info@shopname.com).
+- If you are not certain of the exact email address, set the field to null.

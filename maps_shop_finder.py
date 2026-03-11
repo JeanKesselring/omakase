@@ -103,11 +103,10 @@ def find_shops(country: str, city: str) -> dict:
                 "type": query,
                 "city": parsed_city,
                 "country": parsed_country,
+                "address": address,
                 "website": details.get("website") or None,
-                "email": None,  # Maps API does not provide email; use email_scraper.py
+                "email": None,  # Maps API does not provide email; scraped separately
                 "phone": details.get("formatted_phone_number") or None,
-                "instagram": None,
-                "reason": f"Found via Google Maps search for '{query}' in {location}.",
             })
 
     return {

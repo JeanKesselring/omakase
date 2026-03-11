@@ -80,6 +80,8 @@ def rank_emails(emails: list[str], domain: str) -> list[str]:
     preferred_prefixes = ("info", "contact", "shop", "hello", "mail", "office", "hallo")
 
     def score(email: str) -> int:
+        if "@" not in email:
+            return -1
         local, host = email.split("@", 1)
         s = 0
         if domain and domain in host:
@@ -88,7 +90,7 @@ def rank_emails(emails: list[str], domain: str) -> list[str]:
             s += 5
         return s
 
-    return sorted(emails, key=score, reverse=True)
+    return sorted((e for e in emails if "@" in e), key=score, reverse=True)
 
 
 def fetch(url: str, timeout: int = 8) -> str | None:
@@ -128,7 +130,8 @@ def scrape_email(website: str) -> str | None:
             return ranked[0]
 
     if all_emails:
-        return rank_emails(list(set(all_emails)), domain)[0]
+        ranked = rank_emails(list(set(all_emails)), domain)
+        return ranked[0] if ranked else None
 
     return None
 

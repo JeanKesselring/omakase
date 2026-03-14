@@ -11,12 +11,16 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
+from dotenv import load_dotenv
 
+
+load_dotenv()
+email_password = os.getenv('OMAKASE_EMAIL_PASSWORD')  # or whatever your env var is called
 
 SMTP_HOST = "mail.infomaniak.com"
 SMTP_PORT = 587
 SENDER_EMAIL = "info@omakasegame.com"
-SMTP_PASSWORD = os.environ.get("OMAKASE_EMAIL_PASSWORD")
+SMTP_PASSWORD = email_password
 
 
 def send_email(
@@ -40,7 +44,7 @@ def send_email(
         raise ValueError(
             "SMTP password not set. Export OMAKASE_EMAIL_PASSWORD as an environment variable."
         )
-
+    print(SMTP_PASSWORD)
     msg = MIMEMultipart()
     msg["From"] = SENDER_EMAIL
     msg["To"] = to

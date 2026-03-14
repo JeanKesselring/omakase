@@ -1,0 +1,32 @@
+Vienna,Austria
+Graz,Austria
+Linz,Austria
+Salzburg,Austria
+Innsbruck,Austria
+Brussels,Belgium
+Antwerp,Belgium
+Ghent,Belgium
+Liège,Belgium
+Bruges,Belgium
+Sofia,Bulgaria
+Plovdiv,Bulgaria
+Varna,Bulgaria
+Burgas,Bulgaria
+Zagreb,Croatia
+Split,Croatia
+Rijeka,Croatia
+Osijek,Croatia
+Nicosia,Cyprus
+Limassol,Cyprus
+Larnaca,Cyprus
+Prague,Czech Republic
+Brno,Czech Republic
+Ostrava,Czech Republic
+Plzeň,Czech Republic
+Copenhagen,Denmark
+Aarhus,Denmark
+Odense,Denmark
+Aalborg,Denmark
+Helsinki,Finland
+Espoo,Finland
+Tampere,Finland

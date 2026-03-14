@@ -28,9 +28,6 @@ Copenhagen,Denmark
 Aarhus,Denmark
 Odense,Denmark
 Aalborg,Denmark
-Tallinn,Estonia
-Tartu,Estonia
-Narva,Estonia
 Helsinki,Finland
 Espoo,Finland
 Tampere,Finland
@@ -101,12 +98,6 @@ Verona,Italy
 Messina,Italy
 Padua,Italy
 Trieste,Italy
-Riga,Latvia
-Daugavpils,Latvia
-Liepāja,Latvia
-Vilnius,Lithuania
-Kaunas,Lithuania
-Klaipėda,Lithuania
 Luxembourg City,Luxembourg
 Valletta,Malta
 Birkirkara,Malta
@@ -140,29 +131,6 @@ Porto,Portugal
 Braga,Portugal
 Setúbal,Portugal
 Bucharest,Romania
-Cluj-Napoca,Romania
-Timișoara,Romania
-Iași,Romania
-Constanța,Romania
-Moscow,Russia
-Saint Petersburg,Russia
-Novosibirsk,Russia
-Yekaterinburg,Russia
-Kazan,Russia
-Nizhny Novgorod,Russia
-Chelyabinsk,Russia
-Omsk,Russia
-Samara,Russia
-Rostov-on-Don,Russia
-Ufa,Russia
-Krasnoyarsk,Russia
-Belgrade,Serbia
-Novi Sad,Serbia
-Niš,Serbia
-Bratislava,Slovakia
-Košice,Slovakia
-Ljubljana,Slovenia
-Maribor,Slovenia
 Madrid,Spain
 Barcelona,Spain
 Valencia,Spain
@@ -184,7 +152,6 @@ Malmö,Sweden
 Uppsala,Sweden
 Västerås,Sweden
 Bern,Switzerland
-Zurich,Switzerland
 Geneva,Switzerland
 Basel,Switzerland
 Lausanne,Switzerland
@@ -211,11 +178,5 @@ Nottingham,United Kingdom
 Newcastle,United Kingdom
 Tirana,Albania
 Andorra la Vella,Andorra
-Sarajevo,Bosnia and Herzegovina
-Banja Luka,Bosnia and Herzegovina
-Podgorica,Montenegro
-Skopje,North Macedonia
-San Marino,San Marino
-Pristina,Kosovo
 Vaduz,Liechtenstein
 Monaco,Monaco

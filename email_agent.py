@@ -44,7 +44,6 @@ def send_email(
         raise ValueError(
             "SMTP password not set. Export OMAKASE_EMAIL_PASSWORD as an environment variable."
         )
-    print(SMTP_PASSWORD)
     msg = MIMEMultipart()
     msg["From"] = SENDER_EMAIL
     msg["To"] = to

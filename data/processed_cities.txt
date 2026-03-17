@@ -30,3 +30,13 @@ Aalborg,Denmark
 Helsinki,Finland
 Espoo,Finland
 Tampere,Finland
+Turku,Finland
+Oulu,Finland
+Paris,France
+Marseille,France
+Lyon,France
+Toulouse,France
+Nice,France
+Nantes,France
+Strasbourg,France
+Montpellier,France

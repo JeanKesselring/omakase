@@ -40,3 +40,8 @@ Nice,France
 Nantes,France
 Strasbourg,France
 Montpellier,France
+Bordeaux,France
+Lille,France
+Rennes,France
+Reims,France
+Le Havre,France

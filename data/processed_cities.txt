@@ -45,3 +45,18 @@ Lille,France
 Rennes,France
 Reims,France
 Le Havre,France
+Saint-Étienne,France
+Toulon,France
+Berlin,Germany
+Hamburg,Germany
+Munich,Germany
+Cologne,Germany
+Frankfurt,Germany
+Stuttgart,Germany
+Düsseldorf,Germany
+Dortmund,Germany
+Essen,Germany
+Leipzig,Germany
+Bremen,Germany
+Dresden,Germany
+Hanover,Germany

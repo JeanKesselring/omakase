@@ -43,7 +43,7 @@ HEADERS = {
     )
 }
 
-EMAIL_REGEX = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+EMAIL_REGEX = re.compile(r"\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,15}\b")
 
 
 def extract_emails_from_html(html: str) -> list[str]:
@@ -61,7 +61,7 @@ def extract_emails_from_html(html: str) -> list[str]:
                 found.add(email.lower())
 
     # From raw text via regex
-    for match in EMAIL_REGEX.finditer(soup.get_text()):
+    for match in EMAIL_REGEX.finditer(soup.get_text(separator=" ")):
         found.add(match.group(0).lower())
 
     # Filter out noise

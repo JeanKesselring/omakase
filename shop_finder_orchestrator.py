@@ -15,8 +15,12 @@ import re
 import time
 from pathlib import Path
 
+import db
+import contact_scorer
+from batch_critic import filter_irrelevant
 from maps_shop_finder import find_shops
 from email_scraper import scrape_email
+from website_verifier import verify as verify_website
 
 CITIES_CSV = Path(__file__).parent / "data" / "cities.csv"
 BATCH_DIR = Path(__file__).parent / "data" / "shop_batches"
@@ -79,25 +83,30 @@ def save_batch(shops: list[dict]) -> None:
 
 # ── main loop ────────────────────────────────────────────────────────────────
 
-def run(top_k: int | None = None) -> None:
+def run(top_k: int | None = None, cities: list[dict] | None = None) -> None:
     """
     Args:
-        top_k: Process at most this many cities. None = all.
+        top_k:  Process at most this many cities from the queue. None = all.
+        cities: If provided, process exactly these cities (skips the queue).
     """
-    processed = load_processed_cities()
+    db.init_db()
+    conn = db.get_connection()
 
-    with open(CITIES_CSV, newline="", encoding="utf-8") as f:
-        all_cities = [
-            {"city": row["City"].strip(), "country": row["Country"].strip()}
-            for row in csv.DictReader(f)
+    if cities is not None:
+        pending_cities = cities
+    else:
+        processed = load_processed_cities()
+        with open(CITIES_CSV, newline="", encoding="utf-8") as f:
+            all_cities = [
+                {"city": row["City"].strip(), "country": row["Country"].strip()}
+                for row in csv.DictReader(f)
+            ]
+        pending_cities = [
+            c for c in all_cities
+            if (c["city"].lower(), c["country"].lower()) not in processed
         ]
-
-    pending_cities = [
-        c for c in all_cities
-        if (c["city"].lower(), c["country"].lower()) not in processed
-    ]
-    if top_k is not None:
-        pending_cities = pending_cities[:top_k]
+        if top_k is not None:
+            pending_cities = pending_cities[:top_k]
 
     print(f"{len(pending_cities)} cities to process.\n")
 
@@ -122,13 +131,17 @@ def run(top_k: int | None = None) -> None:
             if not website:
                 continue
 
+            if not verify_website(website, shop.get("name", ""), shop.get("type", "")):
+                print(f"    - {shop['name']} — skipped (wrong business at {website})")
+                continue
+
             email = scrape_email(website)
             time.sleep(0.8)
 
             if not email:
                 continue
 
-            buffer.append({
+            shop_dict = {
                 "name":    shop.get("name", ""),
                 "country": country,
                 "city":    city,
@@ -138,21 +151,53 @@ def run(top_k: int | None = None) -> None:
                 "email":   email,
                 "phone":   shop.get("phone") or "",
                 "status":  "",
-            })
-            print(f"    + {shop['name']} — {email}")
+            }
+
+            # Score contact quality with Gemini; skip low-confidence contacts
+            scored = contact_scorer.score_shops([shop_dict])[0]
+            score = scored.get("contact_score", 5)
+            reason = scored.get("contact_score_reason", "")
+            if score < contact_scorer.SCORE_THRESHOLD:
+                print(f"    - {shop['name']} — skipped (score {score}: {reason})")
+                continue
+
+            shop_dict["contact_score"] = score
+            shop_dict["contact_score_reason"] = reason
+            buffer.append(shop_dict)
+            print(f"    + {shop['name']} — {email} (score {score})")
 
             if len(buffer) >= BATCH_SIZE:
+                buffer = filter_irrelevant(buffer)
                 save_batch(buffer)
+                for s in buffer:
+                    db.upsert_shop(conn, s)
+                conn.commit()
                 buffer = []
 
         mark_city_processed(city, country)
 
     # save any remaining shops that didn't fill a full batch
     if buffer:
+        buffer = filter_irrelevant(buffer)
         save_batch(buffer)
+        for s in buffer:
+            db.upsert_shop(conn, s)
+        conn.commit()
 
+    conn.close()
     print("\nAll done.")
 
 
 if __name__ == "__main__":
-    run(top_k=5)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--city",    help="Target a specific city")
+    parser.add_argument("--country", help="Country for the target city")
+    parser.add_argument("--top_k",   type=int, default=5, help="Number of cities to process (ignored if --city is set)")
+    args = parser.parse_args()
+
+    if args.city and args.country:
+        # Run for a single specific city, bypassing the processed-cities queue
+        run(cities=[{"city": args.city, "country": args.country}])
+    else:
+        run(top_k=args.top_k)

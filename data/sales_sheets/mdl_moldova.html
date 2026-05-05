@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OMAKASE — Sales Sheet | Moldova</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #1a1a1a;
+  background: #e8e8e8;
+}
+
+.page {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto 16px;
+  background: white;
+  overflow: hidden;
+  position: relative;
+}
+
+@media print {
+  body { background: white; }
+  .page { margin: 0; page-break-after: always; box-shadow: none; }
+}
+
+/* ── PAGE 1 ─────────────────────────────────────────── */
+.page-1 {
+  background: linear-gradient(150deg, #f7bcbc 0%, #e85070 55%, #f2a8b8 100%);
+  display: flex;
+  flex-direction: column;
+}
+
+.hero {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 52px 40px 40px;
+  min-height: 195mm;
+}
+
+/* CSS-only game box illustration */
+.game-box {
+  width: 230px;
+  height: 295px;
+  background: linear-gradient(135deg, #faf2de 0%, #e8d498 100%);
+  border-radius: 14px;
+  box-shadow:
+    18px 18px 50px rgba(0,0,0,0.32),
+    -6px -6px 18px rgba(255,255,255,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.55);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  transform: perspective(900px) rotateY(-9deg) rotateX(2deg);
+}
+
+.sushi-outer {
+  width: 165px;
+  height: 165px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #f6e4a8 0%, #f6e4a8 50%, #4a9952 50%, #4a9952 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 2px 12px rgba(0,0,0,0.12);
+}
+
+.sushi-inner {
+  width: 105px;
+  height: 105px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 36%, #d4956a 0%, #9b6040 50%, #5c3520 100%);
+  box-shadow: inset 0 -5px 14px rgba(0,0,0,0.28);
+}
+
+.box-brand {
+  font-size: 27px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  color: #2a1508;
+}
+
+/* Bottom white info bar */
+.info-bar {
+  background: white;
+  padding: 26px 38px 28px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: center;
+}
+
+.game-heading {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+}
+
+.game-heading span {
+  font-weight: 400;
+  font-size: 20px;
+  letter-spacing: 0;
+  color: #555;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 12px;
+}
+
+.desc {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #333;
+}
+
+.contents {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #333;
+}
+
+.contents b { font-weight: 700; }
+
+.price-block {
+  text-align: right;
+  padding-left: 22px;
+  border-left: 2px solid #ececec;
+  min-width: 120px;
+}
+
+.rrp-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #aaa;
+  margin-bottom: 2px;
+}
+
+.rrp-price {
+  font-size: 44px;
+  font-weight: 900;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.vat-note {
+  font-size: 10px;
+  color: #999;
+  margin-top: 2px;
+}
+
+/* ── PAGE 2 ─────────────────────────────────────────── */
+.page-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr auto;
+}
+
+.left-visual {
+  background: linear-gradient(150deg, #f7bcbc 0%, #e85070 55%, #f2a8b8 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 30px 24px;
+  min-height: 175mm;
+}
+
+/* Card grid mockup */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 62px);
+  grid-template-rows: repeat(3, 84px);
+  gap: 8px;
+}
+
+.card {
+  border-radius: 7px;
+  border: 2.5px solid rgba(255,255,255,0.7);
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.card.blue   { background: linear-gradient(135deg, #b8cce8, #8aacd8); }
+.card.purple { background: linear-gradient(135deg, #c8b8e8, #a898d8); }
+.card.gold   { background: linear-gradient(135deg, #f0d898, #d8b868); }
+
+.gameplay-col {
+  padding: 28px 32px 24px;
+}
+
+.gameplay-title {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+.step {
+  display: flex;
+  gap: 9px;
+  margin-bottom: 13px;
+  align-items: flex-start;
+}
+
+.step-num {
+  font-weight: 700;
+  font-size: 12.5px;
+  min-width: 16px;
+  padding-top: 1px;
+}
+
+.step-text {
+  font-size: 12px;
+  line-height: 1.55;
+  color: #333;
+}
+
+.step-text b { font-weight: 700; color: #1a1a1a; }
+
+.mini-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.mini-card {
+  width: 18px;
+  height: 25px;
+  background: #c8d4e8;
+  border-radius: 3px;
+  border: 1px solid #a8b8cc;
+}
+
+.mini-slot {
+  width: 18px;
+  height: 25px;
+  border: 1.5px solid #bbb;
+  border-radius: 3px;
+}
+
+.mini-slot.filled { background: #c8d4e8; }
+
+.arr { font-size: 11px; color: #777; line-height: 25px; }
+
+/* Pricing row — full width */
+.pricing-row {
+  grid-column: 1 / 3;
+  padding: 20px 38px 24px;
+  border-top: 1px solid #e4e4e4;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 36px;
+  align-items: start;
+}
+
+table.pt {
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+table.pt th {
+  font-weight: 700;
+  font-size: 12.5px;
+  padding: 0 22px 9px 0;
+  text-align: left;
+  border-bottom: 2.5px solid #1a1a1a;
+  white-space: nowrap;
+}
+
+table.pt td {
+  padding: 9px 22px 9px 0;
+  border-bottom: 1px solid #ebebeb;
+  color: #444;
+}
+
+table.pt td:first-child { color: #666; }
+
+.exchange-note {
+  font-size: 9.5px;
+  color: #bbb;
+  margin-top: 9px;
+  font-style: italic;
+}
+
+.contact {
+  font-size: 11.5px;
+  line-height: 2;
+  color: #555;
+}
+
+.contact a { color: #555; text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<!-- ══════════ PAGE 1 ══════════ -->
+<div class="page page-1">
+  <div class="hero">
+    <div class="game-box">
+      <div class="sushi-outer">
+        <div class="sushi-inner"></div>
+      </div>
+      <div class="box-brand">OMAKASE</div>
+    </div>
+  </div>
+  <div class="info-bar">
+    <div class="info-grid">
+      <div>
+        <div class="game-heading">OMAKASE <span>The Sushi Game</span></div>
+        <div class="two-col">
+          <p class="desc">Compete with other diners to collect the most valuable sushi sets.
+          Strategize, swap, and use action cards to outsmart your opponents.</p>
+          <p class="desc">Strong, modern theme (sushi &amp; Japan) with wide appeal. Simple rules,
+          easy to demo and explain in under 5 minutes.</p>
+        </div>
+        <p class="contents"><b>45</b> Sushi Cards, <b>17</b> Action Cards, <b>1</b> Rulebook, <b>1</b> Menu</p>
+      </div>
+      <div class="price-block">
+        <div class="rrp-label">RRP</div>
+        <div class="rrp-price">480 MDL</div>
+        <div class="vat-note">(incl. 20% VAT)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE 2 ══════════ -->
+<div class="page page-2">
+  <div class="left-visual">
+    <div class="cards-grid">
+      <div class="card blue">🍣</div>
+      <div class="card purple">🍱</div>
+      <div class="card gold">🐟</div>
+      <div class="card gold">🦐</div>
+      <div class="card blue">🍙</div>
+      <div class="card purple">🥢</div>
+      <div class="card purple">🫧</div>
+      <div class="card gold">🍤</div>
+      <div class="card blue">🌊</div>
+    </div>
+  </div>
+
+  <div class="gameplay-col">
+    <div class="gameplay-title">Gameplay</div>
+
+    <div class="step">
+      <span class="step-num">1.</span>
+      <div class="step-text">
+        <b>Draw a Card:</b> Draw one card from the deck.
+        <div class="mini-icons">
+          <div class="mini-card"></div>
+          <span class="arr">→</span>
+          <div class="mini-card"></div><div class="mini-card"></div><div class="mini-card"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="step-num">2.</span>
+      <div class="step-text">
+        <b>Play an Action Card:</b> If you have one, you can play it by putting it into the trash.
+        <div class="mini-icons">
+          <div class="mini-card"></div><div class="mini-card"></div>
+          <span class="arr">→</span>
+          <div class="mini-card"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="step-num">3.</span>
+      <div class="step-text">
+        <b>Exchange a Card:</b> Exchange one card from your hand with any card on the conveyor belt.
+        <div class="mini-icons">
+          <div class="mini-slot"></div><div class="mini-slot"></div>
+          <div class="mini-slot"></div><div class="mini-slot"></div>
+          <div class="mini-slot"></div>
+          <span class="arr">⇄</span>
+          <div class="mini-card"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="step-num">4.</span>
+      <div class="step-text">
+        <b>Play an Action Card:</b> After swapping a card, you have another opportunity
+        to play an action card.
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="step-num">5.</span>
+      <div class="step-text">
+        <b>Move the Conveyor Belt:</b> Add a new card to the belt. Move all cards one spot
+        to the right. The card that falls off goes to the trash.
+        <div class="mini-icons">
+          <div class="mini-card"></div>
+          <span class="arr">→</span>
+          <div class="mini-slot filled"></div><div class="mini-slot filled"></div>
+          <div class="mini-slot filled"></div><div class="mini-slot filled"></div>
+          <span class="arr">→</span>
+          <div class="mini-card"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full-width pricing section -->
+  <div class="pricing-row">
+    <div>
+      <table class="pt">
+        <thead>
+          <tr>
+            <th>Order Size</th>
+            <th>MDL<br>(excl. VAT)</th>
+            <th>Store margin<br>(at 480 MDL)</th>
+          </tr>
+        </thead>
+        <tbody>
+<tr><td>10 – 24</td><td>288 MDL</td><td>40 %</td></tr>
+<tr><td>25 – 49</td><td>264 MDL</td><td>45 %</td></tr>
+<tr><td>50 – 100</td><td>240 MDL</td><td>50 %</td></tr>
+        </tbody>
+      </table>
+      <div class="exchange-note">1 EUR ≈ 19.2 MDL (indicative). Wholesale invoiced in EUR.</div>
+    </div>
+    <div class="contact">
+      @omakasegame<br>
+      info@omakasegame.com<br>
+      <a href="https://www.omakasegame.com">www.omakasegame.com</a>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

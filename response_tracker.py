@@ -12,13 +12,14 @@ import os
 from pathlib import Path
 
 import google.generativeai as genai
+import db
 
 IMAP_HOST = "mail.infomaniak.com"
 IMAP_PORT = 993
 INBOX_EMAIL = "info@omakasegame.com"
 IMAP_PASSWORD = os.environ.get("OMAKASE_EMAIL_PASSWORD")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-3-flash-preview"
 
 SHOPS_CSV = Path(__file__).parent / "data" / "shops.csv"
 SHOP_FIELDS = ["name", "type", "city", "country", "website", "email", "phone", "instagram", "reason", "status"]
@@ -87,14 +88,21 @@ def run() -> None:
     if not GEMINI_API_KEY:
         raise ValueError("Gemini API key not set. Export GEMINI_API_KEY.")
 
-    rows = load_shops()
-
-    # Build a lookup: shop name (lowercase) -> row index, for shops we've contacted
-    contacted = {
-        row["name"].lower(): i
-        for i, row in enumerate(rows)
-        if row.get("status") == "contacted"
-    }
+    # Build contacted lookup — prefer DB, fall back to CSV
+    use_db = db.DB_PATH.exists()
+    if use_db:
+        conn = db.get_connection()
+        db_rows = conn.execute(
+            "SELECT id, name FROM shops WHERE status = 'contacted'"
+        ).fetchall()
+        contacted = {row["name"].lower(): row["id"] for row in db_rows}
+    else:
+        rows = load_shops()
+        contacted = {
+            row["name"].lower(): i
+            for i, row in enumerate(rows)
+            if row.get("status") == "contacted"
+        }
 
     if not contacted:
         print("No contacted shops to check replies for.")
@@ -105,7 +113,6 @@ def run() -> None:
         imap.login(INBOX_EMAIL, IMAP_PASSWORD)
         imap.select("INBOX")
 
-        # Search for all reply emails matching our subject pattern
         _, message_ids = imap.search(None, f'SUBJECT "Re: {SUBJECT_PREFIX}"')
         ids = message_ids[0].split()
         print(f"Found {len(ids)} reply email(s) to check.\n")
@@ -117,34 +124,45 @@ def run() -> None:
             msg = email.message_from_bytes(raw)
 
             subject = msg.get("Subject", "")
-            sender = msg.get("From", "")
+            sender  = msg.get("From", "")
 
-            # Extract shop name from subject: "Re: Omakase at {shop_name}?"
             if SUBJECT_PREFIX not in subject:
                 continue
             shop_name_raw = subject.split(SUBJECT_PREFIX, 1)[1].rstrip("?").strip()
             shop_key = shop_name_raw.lower()
 
             if shop_key not in contacted:
-                continue  # Reply from a shop not in our contacted list
-
-            row_index = contacted[shop_key]
-            current_status = rows[row_index].get("status", "")
-
-            # Skip if already classified
-            if current_status in ("positive response", "negative response"):
                 continue
 
-            body = extract_body(msg)
+            body           = extract_body(msg)
             classification = classify_response(body)
-            rows[row_index]["status"] = classification
+
+            if use_db:
+                shop_id = contacted[shop_key]
+                # Check current status before overwriting
+                current = conn.execute(
+                    "SELECT status FROM shops WHERE id = ?", (shop_id,)
+                ).fetchone()
+                if current and current["status"] in ("positive response", "negative response"):
+                    continue
+                db.update_status(conn, shop_id, classification)
+                conn.commit()
+            else:
+                row_index = contacted[shop_key]
+                if rows[row_index].get("status") in ("positive response", "negative response"):
+                    continue
+                rows[row_index]["status"] = classification
 
             print(f"  {shop_name_raw} ({sender}): {classification}")
             updates += 1
 
-    if updates:
+    if use_db:
+        conn.close()
+    elif updates:
         save_shops(rows)
-        print(f"\n{updates} shop(s) updated in {SHOPS_CSV}")
+
+    if updates:
+        print(f"\n{updates} shop(s) updated.")
     else:
         print("No new replies to process.")
 

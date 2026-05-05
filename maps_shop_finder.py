@@ -1,119 +1,133 @@
 """
-Maps Shop Finder for Omakase Sales Bot
+Shop Finder for Omakase Sales Bot
 
-Uses the Google Maps Places API to find retail shops in a given city.
-Returns results in the same format as shop_finder.py so it works
-as a drop-in with shop_finder_orchestrator.py.
+Uses Gemini with Google Search grounding to find retail shops in a given city.
+Drop-in replacement for the Google Maps Places API version — same find_shops()
+interface, so shop_finder_orchestrator.py works unchanged.
+
+Two search passes per city cover different shop-type clusters for better recall.
+Structured JSON output (response_schema) guarantees parseable results.
 """
 
 import os
 import time
+
 import requests
+from dotenv import load_dotenv
 
-GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
+load_dotenv()
 
-TEXT_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
+GEMINI_URL = (
+    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+)
 
-# Search queries run for each city — each targets a different shop type
-SEARCH_QUERIES = [
-    "board game store",
-    "game shop",
-    "toy store",
-    "Japanese store",
-    "Japan shop",
-    "hobby shop",
-    "gift shop",
-    "concept store",
+# Two passes so the model can focus and find more shops per type cluster
+SEARCH_PASSES = [
+    "board game store, game shop, tabletop cafe, hobby shop, comic shop, toy store",
+    "gift shop, concept store, design shop, Japanese store, Asian lifestyle store, bookstore",
 ]
 
-DETAILS_FIELDS = "name,formatted_address,website,formatted_phone_number,url"
+_SHOP_SCHEMA = {
+    "type": "ARRAY",
+    "items": {
+        "type": "OBJECT",
+        "properties": {
+            "name":    {"type": "STRING"},
+            "type":    {"type": "STRING"},
+            "address": {"type": "STRING"},
+            "website": {"type": "STRING"},
+            "phone":   {"type": "STRING"},
+        },
+        "required": ["name", "type", "address"],
+    },
+}
 
 
-def text_search(query: str, location: str) -> list[dict]:
-    """Run a Places Text Search and return raw place results."""
-    params = {
-        "query": f"{query} in {location}",
-        "key": GOOGLE_MAPS_API_KEY,
+def _search(location: str, shop_types: str) -> list[dict]:
+    prompt = (
+        f"Find real, currently operating retail shops in {location} "
+        f"that sell or could stock: {shop_types}.\n"
+        "For each shop include its name, shop type, full address, website URL, and phone number. "
+        "Only include shops physically located in or very near that city. "
+        "Aim for 15–25 results."
+    )
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "tools": [{"google_search": {}}],
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": 8192,
+            "response_mime_type": "application/json",
+            "response_schema": _SHOP_SCHEMA,
+        },
     }
-    response = requests.get(TEXT_SEARCH_URL, params=params, timeout=10)
-    response.raise_for_status()
-    data = response.json()
-    return data.get("results", [])
-
-
-def place_details(place_id: str) -> dict:
-    """Fetch additional details (website, phone) for a place."""
-    params = {
-        "place_id": place_id,
-        "fields": DETAILS_FIELDS,
-        "key": GOOGLE_MAPS_API_KEY,
-    }
-    response = requests.get(DETAILS_URL, params=params, timeout=10)
-    response.raise_for_status()
-    return response.json().get("result", {})
-
-
-def parse_city_country(address: str, fallback_city: str, fallback_country: str) -> tuple[str, str]:
-    """Best-effort city/country extraction from a formatted address."""
-    parts = [p.strip() for p in address.split(",")]
-    city = parts[-3] if len(parts) >= 3 else fallback_city
-    country = parts[-1] if len(parts) >= 1 else fallback_country
-    return city, country
+    resp = requests.post(
+        GEMINI_URL,
+        params={"key": GEMINI_API_KEY},
+        headers={"Content-Type": "application/json"},
+        json=payload,
+        timeout=60,
+    )
+    resp.raise_for_status()
+    import json
+    data = resp.json()
+    if "candidates" not in data:
+        print(f"  [maps_shop_finder] no candidates — response: {json.dumps(data)[:400]}")
+        return []
+    text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    return json.loads(text)
 
 
 def find_shops(country: str, city: str) -> dict:
     """
-    Search Google Maps for shops that could carry Omakase in a given city.
+    Find shops that could carry Omakase in a given city.
 
     Args:
         country: Target country (e.g. "Austria").
-        city:    Target city (e.g. "Vienna").
+        city:    Target city   (e.g. "Vienna").
 
     Returns:
-        Dict with a 'shops' list, matching the format used by shop_finder.py.
+        Dict with a 'shops' list matching the format used by shop_finder_orchestrator.py.
     """
-    if not GOOGLE_MAPS_API_KEY:
-        raise ValueError(
-            "Google Maps API key not set. Export GOOGLE_MAPS_API_KEY as an environment variable."
-        )
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY not set in environment / .env file.")
 
     location = f"{city}, {country}"
-    seen_place_ids: set[str] = set()
-    shops = []
+    seen: set[str] = set()
+    shops: list[dict] = []
 
-    for query in SEARCH_QUERIES:
-        results = text_search(query, location)
-        time.sleep(0.3)  # stay within rate limits
+    for shop_types in SEARCH_PASSES:
+        try:
+            found = _search(location, shop_types)
+        except (requests.RequestException, KeyError, ValueError) as e:
+            print(f"  Gemini search error ({shop_types[:30]}…): {e}")
+            found = []
 
-        for place in results:
-            place_id = place.get("place_id")
-            if not place_id or place_id in seen_place_ids:
+        for place in found:
+            name = (place.get("name") or "").strip()
+            if not name or name.lower() in seen:
                 continue
-            seen_place_ids.add(place_id)
-
-            details = place_details(place_id)
-            time.sleep(0.2)
-
-            address = place.get("formatted_address", "")
-            parsed_city, parsed_country = parse_city_country(address, city, country)
-
+            seen.add(name.lower())
             shops.append({
-                "name": place.get("name", ""),
-                "type": query,
-                "city": parsed_city,
-                "country": parsed_country,
-                "address": address,
-                "website": details.get("website") or None,
-                "email": None,  # Maps API does not provide email; scraped separately
-                "phone": details.get("formatted_phone_number") or None,
+                "name":    name,
+                "type":    place.get("type") or "",
+                "city":    city,
+                "country": country,
+                "address": place.get("address") or "",
+                "website": place.get("website") or None,
+                "email":   None,
+                "phone":   place.get("phone") or None,
             })
+
+        time.sleep(1.0)
 
     return {
         "shops": shops,
         "total": len(shops),
         "location_queried": location,
-        "notes": f"Results sourced from Google Maps Places API across {len(SEARCH_QUERIES)} search queries.",
+        "notes": f"Results from Gemini + Google Search ({len(SEARCH_PASSES)} passes).",
     }
 
 

@@ -13,20 +13,49 @@ Usage:
 import csv
 import re
 import shutil
+import smtplib
 import sys
 import time
-from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import dns.resolver
-from batch_critic import filter_irrelevant, GEMINI_API_KEY
+
+import db
 from email_constructor import construct_email
 from email_agent import send_email
 
 BATCH_DIR = Path(__file__).parent / "data" / "shop_batches"
 CONTACTED_DIR = Path(__file__).parent / "data" / "contacted"
 BASEMAIL = Path(__file__).parent / "prompts" / "basemail.txt"
-SALES_SHEET = Path(__file__).parent / "prompts" / "sales sheet (europe).pdf"
+SALES_SHEET_EUR = Path(__file__).parent / "prompts" / "sales sheet (europe).pdf"
+SALES_SHEET_DIR = Path(__file__).parent / "data" / "sales_sheets"
+
+_COUNTRY_TO_PDF: dict[str, str] = {
+    "Albania":        "all_albania.pdf",
+    "Bulgaria":       "bgn_bulgaria.pdf",
+    "Czech Republic": "czk_czech_rep.pdf",
+    "Denmark":        "dkk_denmark.pdf",
+    "Hungary":        "huf_hungary.pdf",
+    "Iceland":        "isk_iceland.pdf",
+    "Moldova":        "mdl_moldova.pdf",
+    "Norway":         "nok_norway.pdf",
+    "Poland":         "pln_poland.pdf",
+    "Romania":        "ron_romania.pdf",
+    "Sweden":         "sek_sweden.pdf",
+    "Switzerland":    "chf_switzerland.pdf",
+    "Turkey":         "try_turkey.pdf",
+    "United Kingdom": "gbp_uk.pdf",
+    "UK":             "gbp_uk.pdf",
+}
+
+
+def sales_sheet_for(country: str) -> Path:
+    """Return the correct sales-sheet PDF for a given country."""
+    name = _COUNTRY_TO_PDF.get(country)
+    if name:
+        return SALES_SHEET_DIR / name
+    return SALES_SHEET_EUR
 
 BATCH_FIELDS = ["name", "country", "city", "type", "address", "website", "email", "phone", "status"]
 FINAL_STATUSES = ("contacted", "positive response", "negative response")
@@ -46,20 +75,52 @@ BLACKLISTED_PREFIXES = (
 )
 
 PERSONAL_DOMAINS = {
-    "gmail.com", "yahoo.com", "yahoo.de", "hotmail.com",
-    "hotmail.de", "outlook.com", "aol.com", "gmx.de",
-    "gmx.net", "web.de", "freenet.de", "t-online.de",
+
 }
 
 
-@lru_cache(maxsize=512)
-def _has_mx_record(domain: str) -> bool:
-    """Check if a domain has MX records (can receive email)."""
+def _domain_is_dead(domain: str) -> bool:
+    """Returns True only if DNS definitively says the domain doesn't exist."""
     try:
-        dns.resolver.resolve(domain, "MX", lifetime=5)
+        dns.resolver.resolve(domain, "A", lifetime=5)
+        return False
+    except dns.resolver.NXDOMAIN:
         return True
     except Exception:
-        return False
+        return False  # timeout / no answer / network error = assume alive
+
+
+def purge_dead_domains(conn) -> int:
+    """Scan all pending shops via DNS in parallel, mark dead ones 'no email'. Returns count purged."""
+    rows = conn.execute(
+        "SELECT id, name, email FROM shops WHERE (status='' OR status IS NULL) AND email != ''"
+    ).fetchall()
+
+    domain_cache: dict[str, bool] = {}
+    to_purge: list[tuple[int, str, str]] = []
+
+    def check(row):
+        domain = row["email"].split("@")[-1].lower()
+        if domain not in domain_cache:
+            domain_cache[domain] = _domain_is_dead(domain)
+        return row, domain_cache[domain]
+
+    print(f"Scanning {len(rows)} pending shops for dead domains...")
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        futures = {pool.submit(check, r): r for r in rows}
+        for i, f in enumerate(as_completed(futures), 1):
+            row, dead = f.result()
+            if dead:
+                to_purge.append((row["id"], row["name"], row["email"]))
+            if i % 50 == 0:
+                print(f"  {i}/{len(rows)} checked, {len(to_purge)} dead so far...")
+
+    for shop_id, name, email in to_purge:
+        db.update_status(conn, shop_id, "no email")
+        print(f"  purged: {name} <{email}>")
+    conn.commit()
+    print(f"\nPurged {len(to_purge)} dead shops. {len(rows) - len(to_purge)} remain in queue.")
+    return len(to_purge)
 
 
 def is_valid_target_email(email: str) -> tuple[bool, str]:
@@ -77,9 +138,6 @@ def is_valid_target_email(email: str) -> tuple[bool, str]:
 
     if domain.lower() in PERSONAL_DOMAINS:
         return False, f"personal email ({domain})"
-
-    if not _has_mx_record(domain):
-        return False, f"no MX record ({domain})"
 
     return True, ""
 
@@ -115,14 +173,69 @@ def pick_next_batch() -> Path | None:
     return None
 
 
-def run(top_k: int = 50, delay_seconds: float = 2.0) -> None:
+def _send_to_shops(shops: list[dict], conn, delay_seconds: float) -> int:
     """
-    Pick the next batch and send emails to all pending shops in it.
+    Core send loop shared by both DB and CSV pipelines.
+    Updates status in DB (if conn provided) and returns count sent.
+    """
+    sent = 0
+    for idx, shop in enumerate(shops):
+        name  = shop["name"]
+        email = (shop.get("email") or "").strip()
+        shop_id = shop.get("id")
 
-    Args:
-        top_k:         Max number of emails to send in this run.
-        delay_seconds: Pause between sends to avoid SMTP throttling.
-    """
+        print(f"[{idx + 1}/{len(shops)}] {name} <{email}> ... ", end="", flush=True)
+
+        ok, reason = is_valid_target_email(email)
+        if not ok:
+            print(f"skipped ({reason})")
+            continue
+
+        try:
+            email_data = construct_email(BASEMAIL, shop_name=name)
+            send_email(
+                to=email,
+                subject=email_data["subject"],
+                body=email_data["body"],
+                attachments=[str(sales_sheet_for(shop.get("country", "")))],
+            )
+            if conn and shop_id:
+                db.update_status(conn, shop_id, "contacted")
+                conn.commit()
+            print("sent")
+            sent += 1
+        except smtplib.SMTPRecipientsRefused as e:
+            print(f"bounced — {e}")
+            if conn and shop_id:
+                db.update_status(conn, shop_id, "no email")
+                conn.commit()
+        except (OSError, ValueError) as e:
+            print(f"ERROR — {e}")
+
+        if idx < len(shops) - 1:
+            time.sleep(delay_seconds)
+
+    return sent
+
+
+def _run_db(top_k: int, delay_seconds: float) -> bool:
+    """DB-first pipeline. Returns True if it found and processed pending shops."""
+    conn = db.get_connection()
+    pending_rows = db.get_pending_shops(conn)
+    if not pending_rows:
+        conn.close()
+        return False
+
+    shops = [dict(r) for r in pending_rows]
+    targets = shops[:top_k]
+    print(f"Sending emails to {len(targets)} shop(s)...\n")
+    _send_to_shops(targets, conn, delay_seconds)
+    conn.close()
+    return True
+
+
+def _run_csv(top_k: int, delay_seconds: float) -> None:
+    """CSV fallback pipeline (used when DB has no pending shops)."""
     CONTACTED_DIR.mkdir(parents=True, exist_ok=True)
 
     path = pick_next_batch()
@@ -131,20 +244,20 @@ def run(top_k: int = 50, delay_seconds: float = 2.0) -> None:
         return
 
     rows = load_batch(path)
-
-    pending = [
-        (i, row) for i, row in enumerate(rows)
+    pending_rows = [
+        row for row in rows
         if (row.get("status") or "").strip() not in FINAL_STATUSES
         and (row.get("email") or "").strip()
     ]
 
-    targets = pending[:top_k]
     print(f"Batch: {path.name}")
+    targets = pending_rows[:top_k]
     print(f"Sending emails to {len(targets)} shop(s)...\n")
 
-    for idx, (row_index, shop) in enumerate(targets):
-        name = shop["name"]
-        email = shop["email"].strip()
+    for idx, shop in enumerate(targets):
+        name  = shop["name"]
+        email = (shop.get("email") or "").strip()
+        row_index = rows.index(shop)
 
         print(f"[{idx + 1}/{len(targets)}] {name} <{email}> ... ", end="", flush=True)
 
@@ -159,7 +272,7 @@ def run(top_k: int = 50, delay_seconds: float = 2.0) -> None:
                 to=email,
                 subject=email_data["subject"],
                 body=email_data["body"],
-                attachments=[str(SALES_SHEET)],
+                attachments=[str(sales_sheet_for(shop.get("country", "")))],
             )
             rows[row_index]["status"] = "contacted"
             print("sent")
@@ -171,13 +284,11 @@ def run(top_k: int = 50, delay_seconds: float = 2.0) -> None:
         if idx < len(targets) - 1:
             time.sleep(delay_seconds)
 
-    # Check if all shops in this batch are now done
     remaining = [
         row for row in rows
         if (row.get("status") or "").strip() not in FINAL_STATUSES
         and (row.get("email") or "").strip()
     ]
-
     if not remaining:
         dest = CONTACTED_DIR / path.name
         shutil.move(str(path), str(dest))
@@ -186,6 +297,17 @@ def run(top_k: int = 50, delay_seconds: float = 2.0) -> None:
         print(f"\nDone. {len(remaining)} shop(s) still pending in {path.name}.")
 
 
+def run(top_k: int = 50, delay_seconds: float = 2.0) -> None:
+    """Pick pending shops from DB (or CSV fallback) and send outreach emails."""
+    if not _run_db(top_k, delay_seconds):
+        _run_csv(top_k, delay_seconds)
+
+
 if __name__ == "__main__":
-    k = int(sys.argv[1]) if len(sys.argv) > 1 else 50
-    run(top_k=k)
+    if len(sys.argv) > 1 and sys.argv[1] == "purge":
+        _conn = db.get_connection()
+        purge_dead_domains(_conn)
+        _conn.close()
+    else:
+        k = int(sys.argv[1]) if len(sys.argv) > 1 else 50
+        run(top_k=k)

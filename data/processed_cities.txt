@@ -103,3 +103,23 @@ Birkirkara,Malta
 Chișinău,Moldova
 Amsterdam,Netherlands
 Rotterdam,Netherlands
+The Hague,Netherlands
+Utrecht,Netherlands
+Eindhoven,Netherlands
+Tilburg,Netherlands
+Groningen,Netherlands
+Almere,Netherlands
+Breda,Netherlands
+Nijmegen,Netherlands
+Oslo,Norway
+Bergen,Norway
+Trondheim,Norway
+Stavanger,Norway
+Warsaw,Poland
+Kraków,Poland
+Łódź,Poland
+Wrocław,Poland
+Poznań,Poland
+Gdańsk,Poland
+Szczecin,Poland
+Bydgoszcz,Poland

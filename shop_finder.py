@@ -13,6 +13,7 @@ import google.generativeai as genai
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 MODEL = "gemini-3-flash-preview"
+#gemini-3.1-flash-lite-
 PROMPT_FILE = Path(__file__).parent / "prompts" / "find_shops_prompt.txt"
 
 

@@ -123,3 +123,53 @@ Poznań,Poland
 Gdańsk,Poland
 Szczecin,Poland
 Bydgoszcz,Poland
+Lublin,Poland
+Katowice,Poland
+Lisbon,Portugal
+Porto,Portugal
+Braga,Portugal
+Setúbal,Portugal
+Bucharest,Romania
+Madrid,Spain
+Barcelona,Spain
+Valencia,Spain
+Seville,Spain
+Zaragoza,Spain
+Málaga,Spain
+Murcia,Spain
+Palma,Spain
+Las Palmas,Spain
+Bilbao,Spain
+Alicante,Spain
+Córdoba,Spain
+Valladolid,Spain
+Vigo,Spain
+Gijón,Spain
+Stockholm,Sweden
+Gothenburg,Sweden
+Malmö,Sweden
+Uppsala,Sweden
+Västerås,Sweden
+Bern,Switzerland
+Geneva,Switzerland
+Basel,Switzerland
+Ankara,Turkey
+Istanbul,Turkey
+Izmir,Turkey
+Bursa,Turkey
+Adana,Turkey
+London,United Kingdom
+Birmingham,United Kingdom
+Leeds,United Kingdom
+Glasgow,United Kingdom
+Sheffield,United Kingdom
+Bradford,United Kingdom
+Liverpool,United Kingdom
+Edinburgh,United Kingdom
+Manchester,United Kingdom
+Bristol,United Kingdom
+Cardiff,United Kingdom
+Belfast,United Kingdom
+Leicester,United Kingdom
+Coventry,United Kingdom
+Nottingham,United Kingdom

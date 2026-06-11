@@ -47,6 +47,10 @@ _COUNTRY_TO_PDF: dict[str, str] = {
     "Turkey":         "try_turkey.pdf",
     "United Kingdom": "gbp_uk.pdf",
     "UK":             "gbp_uk.pdf",
+    "United States":  "sales sheet (united states).pdf",
+    "Canada":         "sales sheet (canada).pdf",
+    "Australia":      "sales sheet (australia).pdf",
+    "New Zealand":    "sales sheet (new zealand).pdf",
 }
 
 
@@ -227,7 +231,18 @@ def _run_db(top_k: int, delay_seconds: float) -> bool:
         return False
 
     shops = [dict(r) for r in pending_rows]
-    targets = shops[:top_k]
+
+    seen_emails: set[str] = set()
+    unique_shops: list[dict] = []
+    for s in shops:
+        key = (s.get("email") or "").strip().lower()
+        if key and key not in seen_emails:
+            seen_emails.add(key)
+            unique_shops.append(s)
+        else:
+            print(f"  Skipping duplicate email: {s['name']} <{s.get('email')}>")
+
+    targets = unique_shops[:top_k]
     print(f"Sending emails to {len(targets)} shop(s)...\n")
     _send_to_shops(targets, conn, delay_seconds)
     conn.close()

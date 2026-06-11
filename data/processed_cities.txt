@@ -173,3 +173,161 @@ Belfast,United Kingdom
 Leicester,United Kingdom
 Coventry,United Kingdom
 Nottingham,United Kingdom
+Newcastle,United Kingdom
+Tirana,Albania
+Andorra la Vella,Andorra
+Vaduz,Liechtenstein
+Monaco,Monaco
+New York City,United States
+Los Angeles,United States
+Chicago,United States
+Houston,United States
+Phoenix,United States
+Philadelphia,United States
+San Antonio,United States
+San Diego,United States
+Dallas,United States
+San Jose,United States
+Austin,United States
+Jacksonville,United States
+Fort Worth,United States
+Columbus,United States
+Charlotte,United States
+Indianapolis,United States
+San Francisco,United States
+Seattle,United States
+Denver,United States
+Nashville,United States
+Washington DC,United States
+Las Vegas,United States
+Louisville,United States
+Memphis,United States
+Portland,United States
+Baltimore,United States
+Milwaukee,United States
+Boston,United States
+Atlanta,United States
+Minneapolis,United States
+Tampa,United States
+New Orleans,United States
+Raleigh,United States
+Cleveland,United States
+Pittsburgh,United States
+Cincinnati,United States
+Orlando,United States
+Salt Lake City,United States
+Kansas City,United States
+Sacramento,United States
+Omaha,United States
+Albuquerque,United States
+Tucson,United States
+Buffalo,United States
+Richmond,United States
+Boise,United States
+Spokane,United States
+Tacoma,United States
+Knoxville,United States
+Providence,United States
+Chattanooga,United States
+Grand Rapids,United States
+Des Moines,United States
+Madison,United States
+Durham,United States
+Baton Rouge,United States
+Lexington,United States
+Savannah,United States
+Little Rock,United States
+Dayton,United States
+Fort Wayne,United States
+Worcester,United States
+Fresno,United States
+Long Beach,United States
+Bakersfield,United States
+Stockton,United States
+Riverside,United States
+Anaheim,United States
+Corpus Christi,United States
+Anchorage,United States
+Honolulu,United States
+St. Louis,United States
+Detroit,United States
+Virginia Beach,United States
+Colorado Springs,United States
+Tulsa,United States
+El Paso,United States
+Wichita,United States
+Arlington,United States
+Aurora,United States
+Toronto,Canada
+Montreal,Canada
+Vancouver,Canada
+Calgary,Canada
+Edmonton,Canada
+Ottawa,Canada
+Winnipeg,Canada
+Quebec City,Canada
+Hamilton,Canada
+Kitchener,Canada
+London,Canada
+Victoria,Canada
+Halifax,Canada
+Windsor,Canada
+Saskatoon,Canada
+Regina,Canada
+St. John's,Canada
+Kelowna,Canada
+Abbotsford,Canada
+Barrie,Canada
+Guelph,Canada
+Kingston,Canada
+Sudbury,Canada
+Thunder Bay,Canada
+Sherbrooke,Canada
+Trois-Rivières,Canada
+Saguenay,Canada
+Burnaby,Canada
+Surrey,Canada
+Laval,Canada
+Mississauga,Canada
+Brampton,Canada
+Oakville,Canada
+Markham,Canada
+Sydney,Australia
+Melbourne,Australia
+Brisbane,Australia
+Perth,Australia
+Adelaide,Australia
+Gold Coast,Australia
+Newcastle,Australia
+Canberra,Australia
+Sunshine Coast,Australia
+Wollongong,Australia
+Geelong,Australia
+Hobart,Australia
+Townsville,Australia
+Cairns,Australia
+Darwin,Australia
+Toowoomba,Australia
+Ballarat,Australia
+Bendigo,Australia
+Launceston,Australia
+Albury,Australia
+Mackay,Australia
+Rockhampton,Australia
+Bundaberg,Australia
+Hervey Bay,Australia
+Auckland,New Zealand
+Wellington,New Zealand
+Christchurch,New Zealand
+Hamilton,New Zealand
+Tauranga,New Zealand
+Napier-Hastings,New Zealand
+Dunedin,New Zealand
+Palmerston North,New Zealand
+Nelson,New Zealand
+Rotorua,New Zealand
+New Plymouth,New Zealand
+Whangarei,New Zealand
+Invercargill,New Zealand
+Whanganui,New Zealand
+Gisborne,New Zealand

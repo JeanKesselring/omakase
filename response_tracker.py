@@ -19,7 +19,7 @@ IMAP_PORT = 993
 INBOX_EMAIL = "info@omakasegame.com"
 IMAP_PASSWORD = os.environ.get("OMAKASE_EMAIL_PASSWORD")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-MODEL = "gemini-3-flash-preview"
+MODEL = "gemini-3.1-flash-lite"
 
 SHOPS_CSV = Path(__file__).parent / "data" / "shops.csv"
 SHOP_FIELDS = ["name", "type", "city", "country", "website", "email", "phone", "instagram", "reason", "status"]

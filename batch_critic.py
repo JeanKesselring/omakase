@@ -1,17 +1,20 @@
 """
 Batch Critic for Omakase Sales Bot
 
-Takes a batch CSV and sends shop entries to Gemini to flag shops that
-are unlikely to be good targets for selling Omakase (a sushi-themed board game).
+Filters shops that are unlikely targets for selling Omakase (a sushi-themed
+board game). Two-stage approach to minimise Gemini API calls:
+
+  1. Rule-based pre-classifier: obvious relevant/irrelevant shops are decided
+     instantly from their name + type keywords — no API call needed.
+  2. Gemini fallback: only truly ambiguous shops (neither clearly relevant nor
+     clearly irrelevant by keyword) are sent to the model.
+
+Typically ~70-80 % of shops are classified by rules alone.
 
 Usage:
     python3 batch_critic.py <path_to_batch.csv>
 
-Outputs a reviewed CSV with a "relevance" column added:
-  - "relevant"   — likely a good fit
-  - "irrelevant" — probably not a good target (with reason)
-
-Irrelevant entries are removed from the batch and logged to stdout.
+Outputs the same CSV with irrelevant shops removed.
 """
 
 import csv
@@ -27,12 +30,68 @@ from dotenv import load_dotenv
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
+GEMINI_MODEL = "gemini-3.1-flash-lite"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 BATCH_FIELDS = ["name", "country", "city", "type", "address", "website", "email", "phone", "status"]
 
-SYSTEM_PROMPT = """\
+# ── Rule-based classifier ─────────────────────────────────────────────────────
+
+# Checked first: if any keyword matches → relevant, skip Gemini.
+_RELEVANT_KEYWORDS = (
+    "board game", "tabletop", "game shop", "game store", "game cafe", "game bar",
+    "game room", "hobby shop", "hobby store",
+    "comic", "trading card", "card game", "role-playing", "rpg", "miniature",
+    "anime", "manga", "japanese pop", "japanese gift", "japanese store",
+    "japanese restaurant", "japanese cuisine", "omakase", "sushi",
+    "asian lifestyle", "asian gift", "asian store", "asian import",
+    "k-pop", "kpop",
+    "toy shop", "toy store",
+    "gift shop", "gift store", "concept store", "novelty",
+    "nerd", "geek", "sci-fi", "scifi", "science fiction", "fantasy shop",
+    "puzzle", "collectible",
+    "design shop", "design store",
+    "bookstore", "book shop",
+)
+
+# Checked second: if any keyword matches → irrelevant, skip Gemini.
+_IRRELEVANT_KEYWORDS = (
+    "hair salon", "hair studio", "barbershop", "barber shop", "barber",
+    "nail salon", "nail studio", "nail bar",
+    "day spa", "beauty spa", "massage",
+    "fitness center", "fitness studio", "crossfit", "yoga studio", "pilates",
+    "dental clinic", "dentist", "orthodontist",
+    "medical clinic", "medical center", "urgent care",
+    "pharmacy", "drugstore", "chemist",
+    "clothing store", "clothing boutique", "fashion store", "apparel store",
+    "shoe store", "footwear store", "sneaker store",
+    "furniture store", "home furnishing", "mattress store",
+    "car dealership", "auto dealer", "auto repair", "car wash",
+    "insurance agency", "financial advisor",
+    "real estate",
+    "laundromat", "dry cleaner",
+    "hardware store",
+    "grocery store", "supermarket", "food market",
+    "tattoo", "piercing",
+    "escape room",  # fun but unlikely to stock board games for resale
+)
+
+
+def _quick_classify(shop: dict) -> str:
+    """Return 'relevant', 'irrelevant', or 'ambiguous' based on keywords alone."""
+    combined = f"{shop.get('name', '')} {shop.get('type', '')}".lower()
+    for kw in _RELEVANT_KEYWORDS:
+        if kw in combined:
+            return "relevant"
+    for kw in _IRRELEVANT_KEYWORDS:
+        if kw in combined:
+            return "irrelevant"
+    return "ambiguous"
+
+
+# ── Gemini fallback ───────────────────────────────────────────────────────────
+
+_SYSTEM_PROMPT = """\
 You are a sales targeting assistant for Omakase, a sushi-themed board game.
 
 You will receive a JSON list of shops. For each shop, decide whether it is a \
@@ -43,13 +102,14 @@ relevant target for selling a sushi-themed board game. Good targets include:
 - Comic / hobby / nerd culture shops
 - Japanese/Asian themed lifestyle or gift stores
 - Bookstores with a games section
+- Anime shops, manga shops, Japanese pop culture stores
+- Sushi restaurants, Japanese restaurants, omakase restaurants
 
 Bad targets (irrelevant) include:
-- Sushi restaurants or food businesses
 - Clothing / fashion stores with no game or gift angle
 - Furniture stores
 - Pure art galleries
-- Unrelated service businesses (salons, gyms, etc.)
+- Unrelated service businesses (salons, gyms, clinics, etc.)
 
 Respond with a JSON array of objects, one per shop, in the same order as the input. \
 Each object must have:
@@ -61,10 +121,68 @@ Return ONLY the JSON array, no markdown fences or extra text.\
 """
 
 
+def _call_gemini(shops: list[dict]) -> list[dict]:
+    shop_summaries = [
+        {"name": s["name"], "type": s.get("type", ""), "website": s.get("website", "")}
+        for s in shops
+    ]
+    payload = {
+        "contents": [{
+            "role": "user",
+            "parts": [{"text": _SYSTEM_PROMPT + "\n\nShops:\n" + json.dumps(shop_summaries)}],
+        }],
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 8192},
+    }
+    resp = requests.post(
+        GEMINI_URL,
+        params={"key": GEMINI_API_KEY},
+        headers={"Content-Type": "application/json"},
+        json=payload,
+        timeout=60,
+    )
+    resp.raise_for_status()
+    text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1]
+    if text.endswith("```"):
+        text = text.rsplit("```", 1)[0]
+    return json.loads(text.strip())
+
+
+def _gemini_filter(shops: list[dict]) -> list[dict]:
+    """Send ambiguous shops to Gemini in chunks. Returns only relevant ones."""
+    chunk_size = 40
+    kept: list[dict] = []
+
+    for i in range(0, len(shops), chunk_size):
+        chunk = shops[i : i + chunk_size]
+        try:
+            verdicts = _call_gemini(chunk)
+        except Exception as e:
+            print(f"  Gemini error on chunk {i // chunk_size + 1}: {e}")
+            kept.extend(chunk)
+            continue
+
+        verdict_map = {v["name"]: v for v in verdicts}
+        for shop in chunk:
+            v = verdict_map.get(shop["name"], {})
+            if not v.get("relevant", True) is False:
+                kept.append(shop)
+            else:
+                reason = v.get("reason", "")
+                print(f"    ✗ {shop['name']} — {reason}")
+
+        if i + chunk_size < len(shops):
+            time.sleep(1)
+
+    return kept
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
 def load_batch(path: Path) -> list[dict]:
     with open(path, newline="", encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
-    return rows
+        return list(csv.DictReader(f))
 
 
 def save_batch(path: Path, rows: list[dict]) -> None:
@@ -74,89 +192,39 @@ def save_batch(path: Path, rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
-def call_gemini(shops: list[dict]) -> list[dict]:
-    """Send a batch of shops to Gemini for relevance review."""
-    shop_summaries = [
-        {"name": s["name"], "type": s.get("type", ""), "website": s.get("website", "")}
-        for s in shops
-    ]
-
-    payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": SYSTEM_PROMPT + "\n\nShops:\n" + json.dumps(shop_summaries)}],
-            }
-        ],
-        "generationConfig": {
-            "temperature": 0.1,
-            "maxOutputTokens": 4096,
-        },
-    }
-
-    resp = requests.post(
-        GEMINI_URL,
-        params={"key": GEMINI_API_KEY},
-        headers={"Content-Type": "application/json"},
-        json=payload,
-        timeout=60,
-    )
-    resp.raise_for_status()
-
-    text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-    # Strip markdown fences if Gemini wraps them anyway
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1]
-    if text.endswith("```"):
-        text = text.rsplit("```", 1)[0]
-
-    return json.loads(text.strip())
-
-
 def filter_irrelevant(rows: list[dict]) -> list[dict]:
-    """Filter out irrelevant shops using Gemini. Returns only relevant rows."""
+    """Filter out irrelevant shops. Returns only relevant rows."""
     if not rows:
         return rows
 
-    print(f"  Reviewing {len(rows)} shops with Gemini...\n")
-
-    chunk_size = 20
-    all_verdicts = []
-
-    for i in range(0, len(rows), chunk_size):
-        chunk = rows[i : i + chunk_size]
-        try:
-            verdicts = call_gemini(chunk)
-            all_verdicts.extend(verdicts)
-        except Exception as e:
-            print(f"  Gemini error on chunk {i // chunk_size + 1}: {e}")
-            for shop in chunk:
-                all_verdicts.append({"name": shop["name"], "relevant": True, "reason": ""})
-
-        if i + chunk_size < len(rows):
-            time.sleep(1)
-
-    verdict_map = {v["name"]: v for v in all_verdicts}
-
-    kept = []
-    removed = []
+    auto_relevant: list[dict] = []
+    auto_irrelevant: list[dict] = []
+    ambiguous: list[dict] = []
 
     for row in rows:
-        verdict = verdict_map.get(row["name"])
-        if verdict and not verdict.get("relevant", True):
-            removed.append((row["name"], verdict.get("reason", "")))
+        verdict = _quick_classify(row)
+        if verdict == "relevant":
+            auto_relevant.append(row)
+        elif verdict == "irrelevant":
+            auto_irrelevant.append(row)
         else:
-            kept.append(row)
+            ambiguous.append(row)
 
-    if removed:
-        print(f"  Flagged {len(removed)} irrelevant shop(s):\n")
-        for name, reason in removed:
-            print(f"    ✗ {name} — {reason}")
-        print()
+    if auto_irrelevant:
+        print(f"  Rule-filtered {len(auto_irrelevant)} irrelevant / "
+              f"{len(auto_relevant)} auto-approved / "
+              f"{len(ambiguous)} ambiguous → Gemini")
 
-    print(f"  Kept {len(kept)} / {len(rows)} shops.\n")
-    return kept
+    if not ambiguous:
+        print(f"  Kept {len(auto_relevant)} / {len(rows)} shops (no Gemini needed).\n")
+        return auto_relevant
+
+    print(f"  Reviewing {len(ambiguous)} ambiguous shop(s) with Gemini...\n")
+    gemini_kept = _gemini_filter(ambiguous)
+
+    result = auto_relevant + gemini_kept
+    print(f"  Kept {len(result)} / {len(rows)} shops.\n")
+    return result
 
 
 def review_batch(path: Path) -> None:

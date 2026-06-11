@@ -26,7 +26,7 @@ import db
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
+GEMINI_MODEL = "gemini-3.1-flash-lite"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 SCORE_THRESHOLD = 8
@@ -72,7 +72,7 @@ def _call_gemini(shops: list[dict]) -> list[dict]:
             "role": "user",
             "parts": [{"text": SYSTEM_PROMPT + "\n\nShops:\n" + json.dumps(shop_summaries, ensure_ascii=False)}],
         }],
-        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 2048},
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 4096},
     }
 
     resp = requests.post(
@@ -102,7 +102,7 @@ def score_shops(shops: list[dict]) -> list[dict]:
     if not shops:
         return shops
 
-    chunk_size = 20
+    chunk_size = 40
     all_verdicts: list[dict] = []
 
     for i in range(0, len(shops), chunk_size):

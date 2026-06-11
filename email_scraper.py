@@ -6,6 +6,7 @@ and writes the results to scraped_shops.csv.
 """
 
 import csv
+import json
 import re
 import time
 from pathlib import Path
@@ -19,16 +20,17 @@ OUTPUT_CSV = Path(__file__).parent / "data" / "scraped_shops.csv"
 
 SHOP_FIELDS = ["name", "type", "city", "country", "website", "email", "phone", "instagram", "reason", "status"]
 
-# Common paths to try when looking for a contact page
 CONTACT_PATHS = [
-    "/contact", "/contact-us", "/contacts",
-    "/kontakt",           # German
-    "/contact.html", "/kontakt.html",
-    "/about", "/impressum",
-    "/info",
+    "/contact",
+    "/contact-us",
+    "/pages/contact",      # Shopify standard
+    "/pages/contact-us",   # Shopify variant
+    "/about",
+    "/about-us",
+    "/kontakt",            # German / DACH
+    "/impressum",          # German legal page — always contains email
 ]
 
-# Domains to ignore when extracting emails (common false positives)
 IGNORED_EMAIL_DOMAINS = {
     "example.com", "sentry.io", "wixpress.com", "shopify.com",
     "squarespace.com", "wordpress.com", "googletagmanager.com",
@@ -46,13 +48,18 @@ HEADERS = {
 EMAIL_REGEX = re.compile(r"\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,15}\b")
 
 
+def _decode_cloudflare(encoded: str) -> str:
+    """Decode a Cloudflare-obfuscated email (data-cfemail attribute)."""
+    key = int(encoded[:2], 16)
+    return "".join(chr(int(encoded[i:i + 2], 16) ^ key) for i in range(2, len(encoded), 2))
+
+
 def extract_emails_from_html(html: str) -> list[str]:
     """Extract all email addresses from raw HTML, filtering out noise."""
-    # Also decode mailto: links
     soup = BeautifulSoup(html, "html.parser")
-    found = set()
+    found: set[str] = set()
 
-    # From mailto: href attributes
+    # mailto: href attributes
     for tag in soup.find_all("a", href=True):
         href = tag["href"]
         if href.startswith("mailto:"):
@@ -60,11 +67,36 @@ def extract_emails_from_html(html: str) -> list[str]:
             if email:
                 found.add(email.lower())
 
-    # From raw text via regex
-    for match in EMAIL_REGEX.finditer(soup.get_text(separator=" ")):
+    # Cloudflare email protection (data-cfemail attribute)
+    for tag in soup.find_all(attrs={"data-cfemail": True}):
+        try:
+            email = _decode_cloudflare(tag["data-cfemail"])
+            if "@" in email:
+                found.add(email.lower())
+        except (ValueError, IndexError):
+            pass
+
+    # JSON-LD / schema.org (Shopify, WooCommerce, etc. embed structured data)
+    for tag in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(tag.string or "")
+            items = data if isinstance(data, list) else [data]
+            for item in items:
+                if isinstance(item, dict) and item.get("email"):
+                    found.add(item["email"].lower())
+        except (ValueError, AttributeError):
+            pass
+
+    # Plain text via regex — including obfuscated variants
+    text = soup.get_text(separator=" ")
+    deobfuscated = (
+        text
+        .replace("[at]", "@").replace("(at)", "@").replace(" AT ", "@").replace(" at ", "@")
+        .replace("[dot]", ".").replace("(dot)", ".").replace(" DOT ", ".").replace(" dot ", ".")
+    )
+    for match in EMAIL_REGEX.finditer(deobfuscated):
         found.add(match.group(0).lower())
 
-    # Filter out noise
     return [
         e for e in found
         if not any(domain in e for domain in IGNORED_EMAIL_DOMAINS)
@@ -73,10 +105,7 @@ def extract_emails_from_html(html: str) -> list[str]:
 
 
 def rank_emails(emails: list[str], domain: str) -> list[str]:
-    """
-    Sort emails so the most likely contact address comes first.
-    Prefers emails on the shop's own domain, then common prefixes.
-    """
+    """Sort emails so the most likely contact address comes first."""
     preferred_prefixes = ("info", "contact", "shop", "hello", "mail", "office", "hallo")
 
     def score(email: str) -> int:
@@ -93,7 +122,7 @@ def rank_emails(emails: list[str], domain: str) -> list[str]:
     return sorted((e for e in emails if "@" in e), key=score, reverse=True)
 
 
-def fetch(url: str, timeout: int = 8) -> str | None:
+def fetch(url: str, timeout: int = 4) -> str | None:
     """Fetch a URL and return the HTML, or None on failure."""
     try:
         response = requests.get(url, headers=HEADERS, timeout=timeout, allow_redirects=True)
@@ -165,7 +194,6 @@ def run() -> None:
     with open(SHOPS_CSV, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
 
-    # Find resume point: skip everything up to and including the last scraped shop
     resume_after = last_scraped_name()
     if resume_after:
         start_index = next(

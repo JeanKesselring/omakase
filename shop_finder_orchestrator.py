@@ -12,15 +12,14 @@ have already been searched so the script can safely resume.
 
 import csv
 import re
-import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import db
-import contact_scorer
 from batch_critic import filter_irrelevant
 from maps_shop_finder import find_shops
 from email_scraper import scrape_email
-from website_verifier import verify as verify_website
+from website_verifier import verify_batch as verify_website_batch
 
 CITIES_CSV = Path(__file__).parent / "data" / "cities.csv"
 BATCH_DIR = Path(__file__).parent / "data" / "shop_batches"
@@ -120,61 +119,70 @@ def run(top_k: int | None = None, cities: list[dict] | None = None) -> None:
             result = find_shops(country=country, city=city)
             shops_found = result.get("shops", [])
         except (OSError, ValueError, KeyError) as e:
-            print(f"  Maps API error: {e}")
-            mark_city_processed(city, country)
+            print(f"  Maps API error: {e} — skipping (will retry next run)")
             continue
 
-        print(f"  {len(shops_found)} places found via Maps — scraping emails...")
+        shops_with_sites = [s for s in shops_found if (s.get("website") or "").strip()]
+        print(f"  {len(shops_found)} places found — verifying {len(shops_with_sites)} websites...")
 
-        for shop in shops_found:
+        verified = verify_website_batch(shops_with_sites)
+        skipped = len(shops_with_sites) - len(verified)
+        if skipped:
+            print(f"  {skipped} shops skipped (website mismatch)")
+
+        print(f"  {len(verified)} verified — scraping emails...")
+
+        def _scrape_one(shop):
             website = (shop.get("website") or "").strip()
-            if not website:
-                continue
+            return shop, scrape_email(website)
 
-            if not verify_website(website, shop.get("name", ""), shop.get("type", "")):
-                print(f"    - {shop['name']} — skipped (wrong business at {website})")
-                continue
+        scrape_results = []
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            futures = [pool.submit(_scrape_one, s) for s in verified]
+            for future in as_completed(futures):
+                scrape_results.append(future.result())
 
-            email = scrape_email(website)
-            time.sleep(0.8)
-
-            if not email:
-                continue
-
-            shop_dict = {
+        shops_with_email: list[dict] = []
+        for shop, email in scrape_results:
+            shop_data = {
                 "name":    shop.get("name", ""),
                 "country": country,
                 "city":    city,
                 "type":    shop.get("type", ""),
                 "address": shop.get("address", ""),
-                "website": website,
-                "email":   email,
+                "website": (shop.get("website") or "").strip(),
+                "email":   email or "",
                 "phone":   shop.get("phone") or "",
                 "status":  "",
             }
+            db.upsert_shop(conn, shop_data)
+            if email:
+                shops_with_email.append(shop_data)
+        conn.commit()
 
-            # Score contact quality with Gemini; skip low-confidence contacts
-            scored = contact_scorer.score_shops([shop_dict])[0]
-            score = scored.get("contact_score", 5)
-            reason = scored.get("contact_score_reason", "")
-            if score < contact_scorer.SCORE_THRESHOLD:
-                print(f"    - {shop['name']} — skipped (score {score}: {reason})")
-                continue
+        passes_succeeded = result.get("passes_succeeded", 1)
+        if not shops_with_email:
+            if passes_succeeded > 0:
+                mark_city_processed(city, country)
+            else:
+                print("  All Gemini passes failed — city will be retried next run.")
+            continue
 
-            shop_dict["contact_score"] = score
-            shop_dict["contact_score_reason"] = reason
+        print(f"  {len(shops_with_email)} emails found.")
+        for shop_dict in shops_with_email:
+            print(f"    + {shop_dict['name']} — {shop_dict['email']}")
             buffer.append(shop_dict)
-            print(f"    + {shop['name']} — {email} (score {score})")
 
-            if len(buffer) >= BATCH_SIZE:
-                buffer = filter_irrelevant(buffer)
-                save_batch(buffer)
-                for s in buffer:
-                    db.upsert_shop(conn, s)
-                conn.commit()
-                buffer = []
+        if len(buffer) >= BATCH_SIZE:
+            buffer = filter_irrelevant(buffer)
+            save_batch(buffer)
+            for s in buffer:
+                db.upsert_shop(conn, s)
+            conn.commit()
+            buffer = []
 
-        mark_city_processed(city, country)
+        if result.get("passes_succeeded", 1) > 0:
+            mark_city_processed(city, country)
 
     # save any remaining shops that didn't fill a full batch
     if buffer:
